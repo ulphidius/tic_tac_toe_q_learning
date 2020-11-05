@@ -1,4 +1,5 @@
 const GRID_SIZE: usize = 3;
+const NUMBER_OF_ACTIONS: usize = 9;
 
 const REWARD_STANDARD: i8 = 0;
 const REWARD_IMPOSSIBLE: i8 = -10;
@@ -6,6 +7,34 @@ const REWARD_WIN: i8 = 5;
 const REWARD_LOSE: i8 = -5;
 const LEARNING_RATE: f32 = 0.3;
 const DISCOUNT_FACTOR: f32 = 0.9;
+
+enum Action {
+    Collum1Row1,
+    Collum1Row2,
+    Collum1Row3,
+    Collum2Row1,
+    Collum2Row2,
+    Collum2Row3,
+    Collum3Row1,
+    Collum3Row2,
+    Collum3Row3
+}
+
+impl Action {
+    pub fn get_value(&self) -> (usize, usize) {
+        return match self {
+            Action::Collum1Row1 => (0, 0),
+            Action::Collum1Row2 => (0, 1),
+            Action::Collum1Row3 => (0, 2),
+            Action::Collum2Row1 => (1, 0),
+            Action::Collum2Row2 => (1, 1),
+            Action::Collum2Row3 => (1, 2),
+            Action::Collum3Row1 => (2, 0),
+            Action::Collum3Row2 => (2, 1),
+            Action::Collum3Row3 => (2, 2)
+        };
+    }
+}
 
 #[derive(Debug, PartialEq)]
 struct Environment {
@@ -57,11 +86,10 @@ impl Environment {
         };
 
         for x in 0..GRID_SIZE {
-
             for y in 0..GRID_SIZE {
                 horizontal = is_player(horizontal, self.grid[x][y], player); 
                 vertical = is_player(vertical, self.grid[y][x], player);
-                
+
                 diagonal_left_rigth = is_player(diagonal_left_rigth, self.grid[y][y], player);
                 diagonal_rigth_left = is_player(diagonal_rigth_left, self.grid[grid_max_index - y][y], player);
             }
@@ -87,13 +115,19 @@ struct Policy {
 
 impl Policy {
     pub fn new() -> Self {
+        let mut table: Vec<Vec<i32>> = Vec::with_capacity(GRID_SIZE);
+        
+        for index in 0..GRID_SIZE {
+            table[index] = vec![0; NUMBER_OF_ACTIONS];
+        }
+
         return Policy {
-            q_table: Vec::new()
+            q_table: table
         }
     }
 
     // #Q(st, at) = Q(st, at) + learning_rate * (reward + discount_factor * max(Q(state)) - Q(st, at))
-    pub fn update() {
+    pub fn update(&self) {
         unimplemented!();
     }
 

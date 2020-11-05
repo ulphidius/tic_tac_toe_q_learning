@@ -37,47 +37,36 @@ impl Environment {
 
     pub fn player_win(&self, player: bool) -> bool {
         let grid_max_index = GRID_SIZE - 1;
-        let is_player = |original_state: bool, current_value: bool, player: bool| {
-            if current_value == player {
-                return original_state;
-            }
-
-            return false;
-        };
-
         let mut horizontal = true;
         let mut vertical = true;
         let mut diagonal_left_rigth = true;
         let mut diagonal_rigth_left = true;
 
+        let is_player = |original_state: bool, grid_element: Option<bool>, player: bool| {
+            return match grid_element {
+                None => false,
+                Some(value) => {
+                    if value == player {
+                        return original_state;
+                    }
+        
+                    return false;
+                }
+            };
+            
+        };
+
         for x in 0..GRID_SIZE {
 
             for y in 0..GRID_SIZE {
-                horizontal = match self.grid[x][y] {
-                    None => false,
-                    Some(value) => is_player(horizontal, value, player)
-                };
-
-                vertical = match self.grid[y][x] {
-                    None => false,
-                    Some(value) => is_player(vertical, value, player)
-                };
-
-                diagonal_left_rigth = match self.grid[y][y] {
-                    None => false,
-                    Some(value) => is_player(diagonal_left_rigth, value, player)
-                };
-    
-                diagonal_rigth_left = match self.grid[grid_max_index - y][y] {
-                    None => false,
-                    Some(value) => is_player(diagonal_rigth_left, value, player)
-                };
-
-                println!("grid: {:?} dl: {} dr: {}", self.grid, diagonal_left_rigth, diagonal_rigth_left);
+                horizontal = is_player(horizontal, self.grid[x][y], player); 
+                vertical = is_player(vertical, self.grid[y][x], player);
+                
+                diagonal_left_rigth = is_player(diagonal_left_rigth, self.grid[y][y], player);
+                diagonal_rigth_left = is_player(diagonal_rigth_left, self.grid[grid_max_index - y][y], player);
             }
 
             if horizontal || vertical || diagonal_left_rigth || diagonal_rigth_left {
-                println!("COUCOU");
                 return true;
             }
 

@@ -1,4 +1,5 @@
 use rand::prelude::*;
+use serde::{Serialize, Deserialize};
 
 const GRID_SIZE: usize = 3;
 const NUMBER_OF_ACTIONS: usize = 9;
@@ -11,7 +12,7 @@ const DISCOUNT_FACTOR: f32 = 0.9;
 const EPSILON_STEP: f32 = 0.05;
 
 #[derive(Clone)]
-enum Action {
+pub enum Action {
     Collum1Row1,
     Collum1Row2,
     Collum1Row3,
@@ -55,8 +56,9 @@ impl Action {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Environment {
-    grid: Vec<Vec<Option<bool>>>
+pub struct Environment {
+    grid: Vec<Vec<Option<bool>>>,
+    is_finished: bool
 }
 
 impl Environment {
@@ -68,7 +70,8 @@ impl Environment {
         }
 
         return Environment {
-            grid: grid
+            grid: grid,
+            is_finished: false
         };
     }
 
@@ -82,7 +85,7 @@ impl Environment {
         return Ok(self);
     }
 
-    pub fn player_win(&self, player: &bool) -> bool {
+    pub fn player_win(&mut self, player: &bool) -> bool {
         let grid_max_index = GRID_SIZE - 1;
         let mut horizontal = true;
         let mut vertical = true;
@@ -113,6 +116,9 @@ impl Environment {
             }
 
             if horizontal || vertical || diagonal_left_rigth || diagonal_rigth_left {
+                
+                // End game flag used for opti
+                self.is_finished = true;
                 return true;
             }
 
@@ -158,7 +164,8 @@ impl Environment {
     }
 }
 
-struct Agent {
+#[derive(Debug, Clone)]
+pub struct Agent {
     policy: Policy,
     player: bool
 }
@@ -169,10 +176,24 @@ impl Agent {
             policy: Policy::new(),
             player: false
         };
-    } 
+    }
+
+    pub fn new_agents() -> (Self, Self) {
+        return (
+            Self {
+                policy: Policy::new(),
+                player: true
+            },
+            Self {
+                policy: Policy::new(),
+                player: false
+            }
+        );
+    }
 }
 
-struct Policy {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Policy {
     q_table: Vec<Vec<f32>>,
     epsilon: f32
 }
@@ -204,7 +225,7 @@ impl Policy {
         let action_index = chose_action.get_value();
 
         let previous_state_index = environment.get_state_index();
-        let new_state = environment.set_value(action_index, player.clone()).unwrap();
+        let mut new_state = environment.set_value(action_index, player.clone()).unwrap();
 
         let new_state_index = new_state.get_state_index();
 
@@ -263,6 +284,62 @@ impl Policy {
     }
 }
 
+pub fn train_agent_again_random() -> (Agent, Vec<Environment>) {
+    unimplemented!();
+}
+
+pub fn train_agent_again_agent(number_of_games: u16) -> (Policy, Vec<Environment>) {
+    let mut games_record: Vec<Environment> = Vec::new();
+    let (mut agent_to_train1, mut agent_to_train2) = Agent::new_agents();
+
+    let play_a_move = |environment: Environment, agent: &Agent| -> (Policy, Environment) {
+        let agent_action = agent.policy.chose_action(&environment);
+        return agent.policy.clone().update(agent_action, environment, &agent.player);
+    };
+    let update_agents_policy = |mut agent1: Agent, mut agent2: Agent, new_policy: Policy| -> (Agent, Agent) {
+        agent1.policy = new_policy.clone();
+        agent2.policy = new_policy.clone();
+
+        return (agent1, agent2);
+    };
+    let update_epsilon = |mut agent1: Agent, mut agent2: Agent| -> (Agent, Agent) {
+        agent1.policy.epsilon = agent1.policy.update_epsilon();
+        agent2.policy.epsilon = agent2.policy.update_epsilon();
+
+        return (agent1, agent2);
+    };
+
+    for _ in 0..number_of_games {
+        let mut environment = Environment::new();
+
+        while ! environment.is_finished {
+            let mut move_result = play_a_move(environment.clone(), &agent_to_train1);
+            let mut shared_policy = move_result.0;
+            environment = move_result.1;
+            
+            let mut updated_agents = update_agents_policy(agent_to_train1, agent_to_train2, shared_policy);
+            agent_to_train1 = updated_agents.0;
+            agent_to_train2 = updated_agents.1;
+
+            move_result = play_a_move(environment.clone(), &agent_to_train2);
+            shared_policy = move_result.0;
+            environment = move_result.1;
+
+            updated_agents = update_agents_policy(agent_to_train1, agent_to_train2, shared_policy);
+            agent_to_train1 = updated_agents.0;
+            agent_to_train2 = updated_agents.1;
+        }
+
+        let updated_policy = update_epsilon(agent_to_train1, agent_to_train2);
+        agent_to_train1 = updated_policy.0;
+        agent_to_train2 = updated_policy.1;
+
+        games_record.push(environment);
+    }
+
+    return (agent_to_train1.policy, games_record); 
+}
+
 
 
 #[cfg(test)]
@@ -297,7 +374,8 @@ mod tests {
                 vec![None, Some(true), None],
                 vec![None, None, None],
                 vec![None, None, None]
-            ]
+            ],
+            is_finished: false
         };
 
         sample_data.set_value((0, 1), false).unwrap();
@@ -305,19 +383,21 @@ mod tests {
 
     #[test]
     fn environment_is_win_horizontal_test() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![Some(true), Some(true), Some(true)],
                 vec![None, None, None],
                 vec![None, None, None]
-            ]
+            ],
+            is_finished: false
         };
-        let sample_data2 = Environment {
+        let mut sample_data2 = Environment {
             grid: vec![
                 vec![Some(false), Some(false), Some(false)],
                 vec![None, None, None],
                 vec![None, None, None]
-            ]
+            ],
+            is_finished: false
         };
         let player1 = true;
         let player2 = false;
@@ -331,19 +411,21 @@ mod tests {
 
     #[test]
     fn environment_is_win_vertical_test() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![Some(true), None, None],
                 vec![Some(true), None, None],
                 vec![Some(true), None, None]
-            ]
+            ],
+            is_finished: false
         };
-        let sample_data2 = Environment {
+        let mut sample_data2 = Environment {
             grid: vec![
                 vec![Some(false), None, None],
                 vec![Some(false), None, None],
                 vec![Some(false), None, None]
-            ]
+            ],
+            is_finished: false
         };
         let player1 = true;
         let player2 = false;
@@ -357,19 +439,21 @@ mod tests {
 
     #[test]
     fn environment_is_win_diagonal_right_test() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![Some(true), None, None],
                 vec![None, Some(true), None],
                 vec![None, None, Some(true)]
-            ]
+            ],
+            is_finished: false
         };
-        let sample_data2 = Environment {
+        let mut sample_data2 = Environment {
             grid: vec![
                 vec![Some(false), None, None],
                 vec![None, Some(false), None],
                 vec![None, None, Some(false)]
-            ]
+            ],
+            is_finished: false
         };
         let player1 = true;
         let player2 = false;
@@ -383,19 +467,21 @@ mod tests {
 
     #[test]
     fn environment_is_win_diagonal_left_test() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![None, None, Some(true)],
                 vec![None, Some(true), None],
                 vec![Some(true), None, None]
-            ]
+            ],
+            is_finished: false
         };
-        let sample_data2 = Environment {
+        let mut sample_data2 = Environment {
             grid: vec![
                 vec![None, None, Some(false)],
                 vec![None, Some(false), None],
                 vec![Some(false), None, None]
-            ]
+            ],
+            is_finished: false
         };
         let player1 = true;
         let player2 = false;
@@ -409,12 +495,13 @@ mod tests {
 
     #[test]
     fn environment_is_win_horizontal_incompleted() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![Some(true), None, Some(true)],
                 vec![None, None, None],
                 vec![None, None, None]
-            ]
+            ],
+            is_finished: false
         };
 
         assert_eq!(sample_data1.player_win(&true), false);
@@ -422,12 +509,13 @@ mod tests {
 
     #[test]
     fn environment_is_win_horizontal_cancelled() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![Some(true), Some(false), Some(true)],
                 vec![None, None, None],
                 vec![None, None, None]
-            ]
+            ],
+            is_finished: false
         };
         
         assert_eq!(sample_data1.player_win(&true), false);
@@ -435,12 +523,13 @@ mod tests {
     
     #[test]
     fn environment_is_win_vertical_incompleted() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![Some(true), None, None],
                 vec![None, None, None],
                 vec![Some(true), None, None]
-            ]
+            ],
+            is_finished: false
         };
 
         assert_eq!(sample_data1.player_win(&true), false);
@@ -448,12 +537,13 @@ mod tests {
 
     #[test]
     fn environment_is_win_vertical_cancelled() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![Some(true), None, None],
                 vec![Some(false), None, None],
                 vec![Some(true), None, None]
-            ]
+            ],
+            is_finished: false
         };
         
         assert_eq!(sample_data1.player_win(&true), false);
@@ -461,12 +551,13 @@ mod tests {
 
     #[test]
     fn environment_is_win_diagonal_right_incompleted() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![Some(true), None, None],
                 vec![None, None, None],
                 vec![None, None, Some(true)]
-            ]
+            ],
+            is_finished: false
         };
 
         assert_eq!(sample_data1.player_win(&true), false);
@@ -474,12 +565,13 @@ mod tests {
 
     #[test]
     fn environment_is_win_diagonal_right_cancelled() {
-        let sample_data1 = Environment {
+        let mut sample_data1 = Environment {
             grid: vec![
                 vec![Some(true), None, None],
                 vec![None, Some(false), None],
                 vec![None, None, Some(true)]
-            ]
+            ],
+            is_finished: false
         };
         
         assert_eq!(sample_data1.player_win(&true), false);

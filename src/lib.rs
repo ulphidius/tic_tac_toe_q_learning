@@ -199,8 +199,8 @@ impl Policy {
     // Get q value of previous state
     // Get the best estimated reward for the ne state
     // Update the q table with the equation
-    // Return the new the updated Environment
-    pub fn update(&mut self, chose_action: Action, environment: Environment, player: &bool) -> Environment {
+    // Return the new the updated Environment and updated policy
+    pub fn update(mut self, chose_action: Action, environment: Environment, player: &bool) -> (Policy, Environment) {
         let action_index = chose_action.get_value();
 
         let previous_state_index = environment.get_state_index();
@@ -226,7 +226,7 @@ impl Policy {
 
         self.q_table[previous_state_index][index_collum] = q_value + LEARNING_RATE + (f32::from(reward) + DISCOUNT_FACTOR * max_value - q_value);
 
-        return new_state;
+        return (self, new_state);
     }
 
     // Check if we return random action or not
@@ -258,8 +258,8 @@ impl Policy {
     }
 
     // Decrease the random chance after each game
-    fn update_epsilon(&mut self) {
-        self.epsilon -= EPSILON_STEP;
+    pub fn update_epsilon(&self) -> f32 {
+        return self.epsilon - EPSILON_STEP;
     }
 }
 

@@ -614,22 +614,27 @@ mod tests {
         assert_eq!(sample_data1.player_win(&true), false);
     }
 
-    // #[test]
-    // fn environment_get_state_index_test() {
-    //     let mut sample_data1 = Environment {
-    //         grid: vec![
-    //             vec![Some(true), None, None],
-    //             vec![None, Some(false), None],
-    //             vec![None, None, Some(true)]
-    //         ],
-    //         is_finished: false
-    //     };
-    //     unimplemented!();
-    // }
-
     #[test]
-    fn train_test() {
-        let result = train_agent_again_agent(1);
-        assert_eq!(vec![Environment::new()], result.1);
+    fn environment_get_state_index_test() {
+        let sample_data1 = Environment {
+            grid: vec![
+                vec![Some(true), None, None],
+                vec![None, Some(false), None],
+                vec![None, None, Some(true)]
+            ],
+            is_finished: false
+        };
+        let sample_data2 = Environment {
+            grid: vec![
+                vec![Some(true), None, None],
+                vec![None, Some(false), None],
+                vec![None, Some(true), None]
+            ],
+            is_finished: false
+        };
+        let expected_output: usize = 6724;
+        
+        assert_eq!(sample_data1.get_state_index(), expected_output);
+        assert_ne!(sample_data2.get_state_index(), expected_output);
     }
 }

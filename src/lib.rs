@@ -11,7 +11,7 @@ const LEARNING_RATE: f32 = 0.3;
 const DISCOUNT_FACTOR: f32 = 0.9;
 const EPSILON_STEP: f32 = 0.05;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Action {
     Collum1Row1,
     Collum1Row2,
@@ -75,9 +75,9 @@ impl Environment {
         };
     }
 
-    pub fn set_value(mut self, new_value: (usize, usize), player: bool) -> Result<Self, &'static str> {
+    pub fn set_value(mut self, new_value: (usize, usize), player: bool) -> Result<Self, String> {
         if self.grid[new_value.0][new_value.1].is_some() {
-            return Err("This case is already taken");
+            return Err(format!("The field: {:?} is already taked for this game grid: {:?}", new_value, self.grid));
         }
         
         self.grid[new_value.0][new_value.1] = Some(player);
@@ -140,9 +140,9 @@ impl Environment {
                     Some(true) => 1 * factor,
                     Some(false) => 2 * factor
                 };
-            }
 
-            factor *= 3;
+                factor *= 3;
+            }
         }
 
         return state_index;
@@ -161,6 +161,16 @@ impl Environment {
         }
 
         return allow_actions[random.gen_range(0, allow_actions.len())].clone();
+    }
+
+    pub fn is_completed(&self) -> bool {
+        let detected_nones = self.grid.iter()
+                                            .flatten()
+                                            .map(|value| *value)
+                                            .filter(|element| element.is_none())
+                                            .collect::<Vec<Option<bool>>>();
+        
+        return detected_nones.is_empty();
     }
 }
 
@@ -200,10 +210,10 @@ pub struct Policy {
 
 impl Policy {
     pub fn new() -> Self {
-        let mut table: Vec<Vec<f32>> = Vec::with_capacity(NUMBER_OF_STATE as usize);
+        let mut table: Vec<Vec<f32>> = Vec::new();
         
-        for index in 0..NUMBER_OF_STATE as usize {
-            table[index] = vec![0.0; NUMBER_OF_ACTIONS];
+        for _ in 0..NUMBER_OF_STATE as usize {
+            table.push(vec![0.0; NUMBER_OF_ACTIONS]);
         }
 
         return Policy {
@@ -254,28 +264,49 @@ impl Policy {
     // Get the best estimated reward
     // Get the index of the best estimated reward (reverse the get state index equation)
     // Return best action
-    pub fn chose_action(&self, environment: &Environment) -> Action {
+    pub fn chose_action(&self, environment: &Environment) -> Option<Action> {
         let mut random = rand::thread_rng();
         let random_value: f32 = random.gen();
 
+        if environment.is_completed() {
+            return None;
+        }
+
         if random_value < self.epsilon {
-            return environment.get_random_action();
+            return Some(environment.get_random_action());
         }
 
         let current_state_index = environment.get_state_index();
-        let mut max_value: (usize, f32) = (0, 0.0);
+        let current_state = self.q_table[current_state_index].clone();        
+        let mut is_valid_action = false;
+        let mut max_value_index: (usize, usize) = (0, 0);
+        let mut forbidden_index: Vec<usize> = Vec::new();
 
-        for index in 0..self.q_table[current_state_index].len() {
-            let current_value = self.q_table[current_state_index][index];
-
-            if max_value.1 < current_value {
-                max_value = (index, current_value);
-            }
-        }
+        while ! is_valid_action {
+            let (max_index, _) = current_state.iter()
+                .enumerate()
+                .map(|value| (value.0, *value.1))
+                .fold(None, |current_max, (index, value)| { 
+                    return match current_max {
+                        None if ! forbidden_index.contains(&index) => Some((index, value)),
+                        Some((_, max)) if ! forbidden_index.contains(&index) && max < value => Some((index, value)),
+                        _ => current_max
+                    };
+                }).unwrap();
     
-        let max_value_index = (max_value.0 % GRID_SIZE, max_value.0 / GRID_SIZE);
+            max_value_index = (max_index % GRID_SIZE, max_index / GRID_SIZE);
 
-        return Action::get_action(max_value_index).unwrap();
+            if environment.grid[max_value_index.0][max_value_index.1].is_none() {
+                is_valid_action = true;
+            } else {
+                forbidden_index.push(max_index)
+            }
+
+
+        }
+
+
+        return Some(Action::get_action(max_value_index).unwrap());
     }
 
     // Decrease the random chance after each game
@@ -292,9 +323,15 @@ pub fn train_agent_again_agent(number_of_games: u16) -> (Policy, Vec<Environment
     let mut games_record: Vec<Environment> = Vec::new();
     let (mut agent_to_train1, mut agent_to_train2) = Agent::new_agents();
 
-    let play_a_move = |environment: Environment, agent: &Agent| -> (Policy, Environment) {
+    let play_a_move = |mut environment: Environment, agent: &Agent| -> (Policy, Environment) {
         let agent_action = agent.policy.chose_action(&environment);
-        return agent.policy.clone().update(agent_action, environment, &agent.player);
+
+        if environment.is_completed() { 
+            environment.is_finished = true;
+            return (agent.policy.clone(), environment);
+        }
+
+        return agent.policy.clone().update(agent_action.unwrap(), environment, &agent.player);
     };
     let update_agents_policy = |mut agent1: Agent, mut agent2: Agent, new_policy: Policy| -> (Agent, Agent) {
         agent1.policy = new_policy.clone();
@@ -316,6 +353,7 @@ pub fn train_agent_again_agent(number_of_games: u16) -> (Policy, Vec<Environment
             let mut move_result = play_a_move(environment.clone(), &agent_to_train1);
             let mut shared_policy = move_result.0;
             environment = move_result.1;
+            games_record.push(environment.clone());
             
             let mut updated_agents = update_agents_policy(agent_to_train1, agent_to_train2, shared_policy);
             agent_to_train1 = updated_agents.0;
@@ -324,6 +362,7 @@ pub fn train_agent_again_agent(number_of_games: u16) -> (Policy, Vec<Environment
             move_result = play_a_move(environment.clone(), &agent_to_train2);
             shared_policy = move_result.0;
             environment = move_result.1;
+            games_record.push(environment.clone());
 
             updated_agents = update_agents_policy(agent_to_train1, agent_to_train2, shared_policy);
             agent_to_train1 = updated_agents.0;
@@ -333,8 +372,6 @@ pub fn train_agent_again_agent(number_of_games: u16) -> (Policy, Vec<Environment
         let updated_policy = update_epsilon(agent_to_train1, agent_to_train2);
         agent_to_train1 = updated_policy.0;
         agent_to_train2 = updated_policy.1;
-
-        games_record.push(environment);
     }
 
     return (agent_to_train1.policy, games_record); 
@@ -367,7 +404,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "This case is already taken")]
+    #[should_panic(expected = "The field: (0, 1) is already taked for this game grid: [[None, Some(true), None], [None, None, None], [None, None, None]]")]
     fn environment_set_value_already_set_test() {
         let sample_data = Environment {
             grid: vec![
@@ -575,5 +612,24 @@ mod tests {
         };
         
         assert_eq!(sample_data1.player_win(&true), false);
+    }
+
+    // #[test]
+    // fn environment_get_state_index_test() {
+    //     let mut sample_data1 = Environment {
+    //         grid: vec![
+    //             vec![Some(true), None, None],
+    //             vec![None, Some(false), None],
+    //             vec![None, None, Some(true)]
+    //         ],
+    //         is_finished: false
+    //     };
+    //     unimplemented!();
+    // }
+
+    #[test]
+    fn train_test() {
+        let result = train_agent_again_agent(1);
+        assert_eq!(vec![Environment::new()], result.1);
     }
 }

@@ -57,8 +57,8 @@ impl Action {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Environment {
-    grid: Vec<Vec<Option<bool>>>,
-    is_finished: bool
+    pub grid: Vec<Vec<Option<bool>>>,
+    pub is_finished: bool
 }
 
 impl Environment {
@@ -176,8 +176,8 @@ impl Environment {
 
 #[derive(Debug, Clone)]
 pub struct Agent {
-    policy: Policy,
-    player: bool
+    pub policy: Policy,
+    pub player: bool
 }
 
 impl Agent {
@@ -204,8 +204,8 @@ impl Agent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Policy {
-    q_table: Vec<Vec<f32>>,
-    epsilon: f32
+    pub q_table: Vec<Vec<f32>>,
+    pub epsilon: f32
 }
 
 impl Policy {

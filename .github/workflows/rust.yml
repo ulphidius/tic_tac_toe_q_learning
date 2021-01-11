@@ -1,0 +1,36 @@
+name: Rust
+
+on:
+  push:
+    branches: 
+      - master
+      - develop
+  pull_request:
+    branches: 
+      - master
+      - develop
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: webfactory/ssh-agent@v0.3.0
+      with:
+        ssh-private-key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+  
+    - name: Install dependencies
+      run: cargo install cargo-tarpaulin
+    
+    - name: Build
+      run: cargo build
+
+    - name: Test with coverage
+      run: cargo tarpaulin --out Lcov --output-dir ./coverage
+
+    - name: Coveralls
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
